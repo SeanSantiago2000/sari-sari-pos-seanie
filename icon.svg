@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<rect width="128" height="128" rx="24" fill="#174ea6"/>
+<path d="M18 44h92l-8 58H26z" fill="#f4b942"/>
+<path d="M18 44l14-22h64l14 22" fill="#fff"/>
+<path d="M45 22h38l9 22H36z" fill="#d9e8ff"/>
+<path d="M42 58h44v8H42zm0 17h44v8H42z" fill="#174ea6"/>
+<text x="64" y="99" font-family="Arial,sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#174ea6">POS</text>
+</svg>

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sari-Sari POS — Camera Scanner</title>
+<style>
+:root{font-family:Arial,Helvetica,sans-serif;color:#172033;background:#f3f6fb}
+*{box-sizing:border-box}body{margin:0}header{background:#163a63;color:#fff;padding:18px 20px}
+header h1{margin:0;font-size:1.45rem}header p{margin:6px 0 0;color:#dbeafe}
+main{max-width:1100px;margin:18px auto;padding:0 12px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+button,.tab{border:0;border-radius:9px;padding:12px 14px;cursor:pointer;font-weight:700;font-size:1rem}
+.tab{background:#dce6f2;color:#17324f}.tab.active{background:#1769aa;color:white}
+button.primary{background:#1769aa;color:white}button.secondary{background:#e2e8f0;color:#1e293b}button.danger{background:#fee2e2;color:#991b1b}
+button:disabled{opacity:.45;cursor:not-allowed}.panel{background:white;border-radius:12px;padding:16px;box-shadow:0 2px 12px #102a4310;margin-bottom:14px}
+h2{margin:0 0 14px;font-size:1.15rem}h3{margin:0 0 10px;font-size:1rem}
+.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+label{display:block;font-size:.92rem;font-weight:700;margin-bottom:5px}
+input{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;margin-bottom:10px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.scanrow{display:flex;gap:8px}.scanrow input{margin:0;flex:1;min-width:0}
+table{width:100%;border-collapse:collapse;font-size:.94rem}th,td{text-align:left;padding:10px 7px;border-bottom:1px solid #e2e8f0}th{background:#f8fafc}
+.tablewrap{overflow-x:auto}.money{text-align:right;white-space:nowrap}.total{font-size:1.7rem;font-weight:800;text-align:right;color:#0f5132}
+.muted{color:#64748b;font-size:.9rem;line-height:1.45}.status{padding:10px 12px;border-radius:8px;background:#eff6ff;color:#1d4ed8;margin:10px 0;line-height:1.4}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.card{padding:14px;border-radius:10px;background:#eff6ff}.card span{display:block;color:#475569;font-size:.85rem}.card strong{font-size:1.25rem}
+.hidden{display:none!important}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.small{font-size:.82rem}
+#scannerBox{background:#0b1220;border-radius:12px;overflow:hidden;position:relative;margin:10px 0}
+#scannerVideo{width:100%;max-height:48vh;min-height:200px;object-fit:cover;display:block}
+.scanhint{position:absolute;left:10%;right:10%;top:42%;height:16%;border:3px solid #22c55e;border-radius:8px;pointer-events:none;box-shadow:0 0 0 999px #0003}
+.badge{display:inline-block;background:#dcfce7;color:#166534;padding:4px 8px;border-radius:99px;font-size:.8rem;font-weight:bold}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:1fr}.row{grid-template-columns:1fr}header{padding:15px}.panel{padding:13px}button,.tab{padding:12px}table{font-size:.88rem}}
+</style>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#174ea6">
+</head>
+<body>
+<header><h1>🛒 Sari-Sari POS</h1><p>Camera barcode scanner • Offline-capable • Tablet-friendly</p></header>
+<main>
+<div class="tabs">
+<button class="tab active" data-tab="checkout">Checkout</button>
+<button class="tab" data-tab="products">Products</button>
+<button class="tab" data-tab="sales">Sales History</button>
+<button class="tab" data-tab="backup">Backup / Restore</button>
+</div>
+
+<section id="checkout" class="page">
+<div class="grid">
+<div class="panel">
+<h2>📷 Camera barcode scanner</h2>
+<div class="actions"><button class="primary" id="startScan">Start camera</button><button class="secondary" id="stopScan" disabled>Stop camera</button></div>
+<div id="scannerBox" class="hidden"><video id="scannerVideo" playsinline muted></video><div class="scanhint"></div></div>
+<div id="scanStatus" class="status">Tap “Start camera” and allow camera permission. For camera access, open this page in a browser context that supports camera access (usually HTTPS or localhost).</div>
+<p class="muted">Hold the barcode steady inside the green box, with good lighting. The camera reads the barcode number; it does not automatically know the product's price. Register the barcode and price in Products first.</p>
+<hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0">
+<h3>Manual barcode entry (backup)</h3>
+<div class="scanrow"><input id="barcodeInput" placeholder="Type barcode number"><button class="primary" id="addBarcode">Add</button></div>
+<div id="checkoutStatus" class="status">Ready. Register products in Products first.</div>
+<div class="tablewrap"><table><thead><tr><th>Product</th><th>Qty</th><th class="money">Price</th><th class="money">Subtotal</th><th></th></tr></thead><tbody id="cartRows"></tbody></table></div>
+<div class="total" id="grandTotal">Total: ₱0.00</div>
+<div class="actions"><button class="secondary" id="clearCart">Clear transaction</button></div>
+</div>
+<div class="panel">
+<h2>Payment</h2>
+<label for="amountPaid">Amount paid (₱)</label><input id="amountPaid" type="number" min="0" step="0.01" placeholder="0.00">
+<div class="total" style="font-size:1.35rem" id="changeDue">Change: ₱0.00</div>
+<div class="actions"><button class="primary" id="completeSale">Complete sale</button></div>
+<p class="muted">A sale is saved to history only when you press Complete sale and payment covers the total.</p>
+</div>
+</div>
+</section>
+
+<section id="products" class="page hidden">
+<div class="grid">
+<div class="panel">
+<h2 id="productFormTitle">Add a product</h2>
+<form id="productForm">
+<label for="pBarcode">Barcode</label>
+<div class="scanrow"><input id="pBarcode" required placeholder="Scan with camera or type barcode"><button class="secondary" type="button" id="scanProductBarcode">📷 Scan barcode</button></div>
+<label for="pName">Product name</label><input id="pName" required placeholder="e.g. Instant noodles">
+<label for="pPrice">Selling price (₱)</label><input id="pPrice" type="number" min="0" step="0.01" required placeholder="15.00">
+<div class="actions"><button class="primary" type="submit">Save product</button><button class="secondary" type="button" id="cancelEdit">Cancel edit</button></div>
+</form>
+<p class="muted">Tap “Scan barcode” to read a product barcode directly into this form. The camera fills in the barcode number; enter the product name and selling price yourself.</p>
+<div id="productScanPanel" class="hidden">
+  <div id="productScannerBox" style="background:#0b1220;border-radius:10px;overflow:hidden;position:relative;margin:8px 0">
+    <video id="productScannerVideo" playsinline muted style="display:block;width:100%;max-height:35vh;min-height:180px;object-fit:cover"></video>
+    <div style="position:absolute;left:10%;right:10%;top:42%;height:16%;border:3px solid #22c55e;border-radius:8px;pointer-events:none"></div>
+  </div>
+  <div id="productScanStatus" class="status">Point the camera at the barcode.</div>
+  <div class="actions"><button class="secondary" type="button" id="stopProductScan">Stop product camera</button></div>
+</div>
+</div>
+<div class="panel">
+<h2>Product list</h2><input id="productSearch" placeholder="Search by name or barcode">
+<div class="tablewrap"><table><thead><tr><th>Barcode</th><th>Product</th><th class="money">Price</th><th>Actions</th></tr></thead><tbody id="productRows"></tbody></table></div>
+<p class="muted" id="productCount"></p>
+</div>
+</div>
+</section>
+
+<section id="sales" class="page hidden">
+<div class="panel"><h2>Sales history</h2>
+<div class="row"><div><label for="salesDate">Date</label><input id="salesDate" type="date"></div><div><label>&nbsp;</label><button class="secondary" id="showAllSales">Show all dates</button></div></div>
+<div class="cards"><div class="card"><span>Transactions shown</span><strong id="salesCount">0</strong></div><div class="card"><span>Items sold</span><strong id="itemsSold">0</strong></div><div class="card"><span>Total sales</span><strong id="salesTotal">₱0.00</strong></div></div>
+<div class="tablewrap"><table><thead><tr><th>Date & time</th><th>Items</th><th class="money">Total</th><th class="money">Paid</th><th class="money">Change</th><th></th></tr></thead><tbody id="salesRows"></tbody></table></div>
+<p class="muted">Records are stored in this browser on this device. Export backups regularly.</p>
+</div></section>
+
+<section id="backup" class="page hidden">
+<div class="panel"><h2>Backup and restore</h2><p>Export a backup of your products and sales. Save it somewhere safe. Restoring replaces current data.</p>
+<div class="actions"><button class="primary" id="exportBackup">Download backup</button><label class="tab" for="importFile">Choose backup file</label><input id="importFile" type="file" accept=".json,application/json" class="hidden"></div>
+<p id="backupStatus" class="status">No backup action yet.</p><p class="muted">Browser data can be lost if site data is cleared or the device fails. Export backups regularly.</p>
+</div></section>
+</main>
+
+<!-- BarcodeDetector is supported by some browsers only. If unavailable, show a clear message instead of silently failing. -->
+<script>
+const $ = id => document.getElementById(id);
+const peso = n => '₱' + Number(n || 0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const today = () => {const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+let products=load('sspos_products',[]),sales=load('sspos_sales',[]),cart=[],editingBarcode=null;
+let cameraStream=null, detector=null, scanning=false, lastCode='', lastCodeAt=0;
+function load(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch(e){return f}}
+function saveAll(){localStorage.setItem('sspos_products',JSON.stringify(products));localStorage.setItem('sspos_sales',JSON.stringify(sales))}
+function setStatus(msg,bad=false){$('checkoutStatus').textContent=msg;$('checkoutStatus').style.background=bad?'#fef2f2':'#eff6ff';$('checkoutStatus').style.color=bad?'#991b1b':'#1d4ed8'}
+function setScanStatus(msg,bad=false){$('scanStatus').textContent=msg;$('scanStatus').style.background=bad?'#fef2f2':'#eff6ff';$('scanStatus').style.color=bad?'#991b1b':'#1d4ed8'}
+document.querySelectorAll('.tab[data-tab]').forEach(btn=>btn.addEventListener('click',()=>{
+ document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('active',b===btn));
+ document.querySelectorAll('.page').forEach(p=>p.classList.toggle('hidden',p.id!==btn.dataset.tab));
+ if(btn.dataset.tab==='products')renderProducts();if(btn.dataset.tab==='sales')renderSales();
+}));
+function addScannedBarcode(codeOverride){
+ const code=(codeOverride||$('barcodeInput').value).trim();if(!code)return;
+ const p=products.find(x=>x.barcode===code);
+ if(!p){setStatus('Barcode not registered: '+code+'. Add it in Products with its name and price.',true);$('barcodeInput').value='';return}
+ const existing=cart.find(x=>x.barcode===code);
+ if(existing)existing.qty++;else cart.push({barcode:p.barcode,name:p.name,price:Number(p.price),qty:1});
+ $('barcodeInput').value='';setStatus('Added: '+p.name);renderCart();
+}
+$('addBarcode').onclick=()=>addScannedBarcode();
+$('barcodeInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addScannedBarcode()}});
+
+let productCameraStream=null, productDetector=null, productScanning=false, productLastCode='', productLastCodeAt=0;
+async function startProductCamera(){
+ const panel=$('productScanPanel');
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+   $('productScanStatus').textContent='Camera access is not available in this browser context. Open the app through HTTPS or localhost.';panel.classList.remove('hidden');return;
+ }
+ if(!('BarcodeDetector' in window)){
+   $('productScanStatus').textContent='This browser does not support the built-in barcode detector. Try updated Chrome/Edge, or we can add a compatible scanning library.';panel.classList.remove('hidden');return;
+ }
+ try{
+   const supported=await window.BarcodeDetector.getSupportedFormats().catch(()=>[]);
+   const wanted=['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','codabar'];
+   const formats=wanted.filter(f=>supported.includes(f));
+   productDetector=new BarcodeDetector(formats.length?{formats}:undefined);
+   productCameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+   $('productScannerVideo').srcObject=productCameraStream;
+   panel.classList.remove('hidden');
+   await $('productScannerVideo').play();
+   productScanning=true;
+   $('productScanStatus').textContent='Camera on. Hold the barcode inside the green frame.';
+   productScanLoop();
+ }catch(err){
+   stopProductCamera();
+   panel.classList.remove('hidden');
+   $('productScanStatus').textContent='Could not start camera: '+(err.message||err.name)+'. Allow camera permission and try again.';
+ }
+}
+async function productScanLoop(){
+ if(!productScanning)return;
+ try{
+  const video=$('productScannerVideo');
+  if(video.readyState>=2){
+   const codes=await productDetector.detect(video);
+   if(codes.length){
+    const code=codes[0].rawValue,now=Date.now();
+    if(code && (code!==productLastCode || now-productLastCodeAt>1500)){
+      productLastCode=code;productLastCodeAt=now;
+      $('pBarcode').value=code;
+      $('productScanStatus').textContent='Barcode captured: '+code+'. Now enter the product name and price.';
+      stopProductCamera();
+      $('pName').focus();
+      return;
+    }
+   }
+  }
+ }catch(e){}
+ if(productScanning)requestAnimationFrame(productScanLoop);
+}
+function stopProductCamera(){
+ productScanning=false;
+ if(productCameraStream){productCameraStream.getTracks().forEach(t=>t.stop());productCameraStream=null;}
+ const v=$('productScannerVideo');if(v)v.srcObject=null;
+}
+$('scanProductBarcode').addEventListener('click',startProductCamera);
+$('stopProductScan').addEventListener('click',()=>{stopProductCamera();$('productScanStatus').textContent='Product camera stopped.'});
+
+function renderCart(){
+ $('cartRows').innerHTML='';
+ cart.forEach((item,i)=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${esc(item.name)}<div class="muted small">${esc(item.barcode)}</div></td><td>${item.qty}</td><td class="money">${peso(item.price)}</td><td class="money">${peso(item.price*item.qty)}</td><td><button class="danger" data-remove="${i}">×</button></td>`;$('cartRows').appendChild(tr)});
+ $('cartRows').querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{cart.splice(Number(b.dataset.remove),1);renderCart()});
+ $('grandTotal').textContent='Total: '+peso(cart.reduce((s,x)=>s+x.price*x.qty,0));updateChange();
+}
+function updateChange(){const total=cart.reduce((s,x)=>s+x.price*x.qty,0),paid=Number($('amountPaid').value||0);$('changeDue').textContent='Change: '+peso(Math.max(0,paid-total))}
+$('amountPaid').oninput=updateChange;
+$('clearCart').onclick=()=>{cart=[];$('amountPaid').value='';renderCart();setStatus('Transaction cleared.')};
+$('completeSale').onclick=()=>{
+ if(!cart.length){setStatus('Add at least one product first.',true);return}
+ const total=cart.reduce((s,x)=>s+x.price*x.qty,0),paid=Number($('amountPaid').value||0);
+ if(paid<total){setStatus('Payment is less than the total.',true);return}
+ sales.unshift({id:Date.now(),date:new Date().toISOString(),items:cart.map(x=>({...x})),total,paid,change:paid-total});
+ saveAll();cart=[];$('amountPaid').value='';renderCart();renderSales();setStatus('Sale saved. Ready for next customer.');
+};
+$('productForm').onsubmit=e=>{
+ e.preventDefault();const barcode=$('pBarcode').value.trim(),name=$('pName').value.trim(),price=Number($('pPrice').value);
+ if(!barcode||!name||!Number.isFinite(price)||price<0)return;
+ if(editingBarcode&&editingBarcode!==barcode&&products.some(p=>p.barcode===barcode)){alert('That barcode already exists.');return}
+ const idx=products.findIndex(p=>p.barcode===editingBarcode),dup=products.find(p=>p.barcode===barcode);
+ if(dup&&idx<0){alert('Barcode already exists. Edit the existing product instead.');return}
+ const record={barcode,name,price};if(idx>=0)products[idx]=record;else products.push(record);
+ saveAll();resetProductForm();renderProducts();setStatus('Product saved: '+name);
+};
+function resetProductForm(){editingBarcode=null;$('productForm').reset();$('productFormTitle').textContent='Add a product'}
+$('cancelEdit').onclick=resetProductForm;
+function renderProducts(){
+ const q=$('productSearch').value.toLowerCase().trim(),filtered=products.filter(p=>(p.name+' '+p.barcode).toLowerCase().includes(q));$('productRows').innerHTML='';
+ filtered.forEach(p=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${esc(p.barcode)}</td><td>${esc(p.name)}</td><td class="money">${peso(p.price)}</td><td><button class="secondary" data-edit="${esc(p.barcode)}">Edit</button> <button class="danger" data-delete="${esc(p.barcode)}">Delete</button></td>`;$('productRows').appendChild(tr)});
+ $('productCount').textContent=products.length+' product(s) registered.';
+ $('productRows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const p=products.find(x=>x.barcode===b.dataset.edit);if(!p)return;editingBarcode=p.barcode;$('pBarcode').value=p.barcode;$('pName').value=p.name;$('pPrice').value=p.price;$('productFormTitle').textContent='Edit product';window.scrollTo({top:0,behavior:'smooth'})});
+ $('productRows').querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{const p=products.find(x=>x.barcode===b.dataset.delete);if(p&&confirm('Delete '+p.name+'?')){products=products.filter(x=>x.barcode!==p.barcode);saveAll();renderProducts()}});
+}
+$('productSearch').oninput=renderProducts;
+function renderSales(){
+ const date=$('salesDate').value,shown=sales.filter(s=>!date||s.date.slice(0,10)===date);
+ $('salesCount').textContent=shown.length;$('itemsSold').textContent=shown.reduce((sum,s)=>sum+s.items.reduce((a,x)=>a+x.qty,0),0);$('salesTotal').textContent=peso(shown.reduce((sum,s)=>sum+s.total,0));$('salesRows').innerHTML='';
+ shown.forEach(s=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${esc(new Date(s.date).toLocaleString())}</td><td>${s.items.reduce((a,x)=>a+x.qty,0)}</td><td class="money">${peso(s.total)}</td><td class="money">${peso(s.paid)}</td><td class="money">${peso(s.change)}</td><td><button class="secondary" data-detail="${s.id}">Details</button></td>`;$('salesRows').appendChild(tr)});
+ $('salesRows').querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>{const s=sales.find(x=>x.id===Number(b.dataset.detail));if(s)alert('Sale details\n'+new Date(s.date).toLocaleString()+'\n\n'+s.items.map(x=>`${x.name} x${x.qty} — ${peso(x.price*x.qty)}`).join('\n')+'\n\nTOTAL: '+peso(s.total)+'\nPAID: '+peso(s.paid)+'\nCHANGE: '+peso(s.change))});
+}
+$('salesDate').value=today();$('salesDate').onchange=renderSales;$('showAllSales').onclick=()=>{$('salesDate').value='';renderSales()};
+$('exportBackup').onclick=()=>{const blob=new Blob([JSON.stringify({app:'Sari-Sari POS',version:2,exportedAt:new Date().toISOString(),products,sales},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='sari-sari-pos-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);$('backupStatus').textContent='Backup downloaded. Keep the file somewhere safe.'};
+$('importFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const d=JSON.parse(await file.text());if(!Array.isArray(d.products)||!Array.isArray(d.sales))throw new Error('Invalid backup format');if(!confirm('This replaces current products and sales. Continue?'))return;products=d.products;sales=d.sales;saveAll();renderProducts();renderSales();$('backupStatus').textContent='Backup restored.'}catch(err){$('backupStatus').textContent='Could not restore: '+err.message}e.target.value=''};
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+async function startCamera(){
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setScanStatus('This browser/context cannot access the camera. Open the app from HTTPS or localhost in a modern browser.',true);return}
+ if(!('BarcodeDetector' in window)){setScanStatus('Camera is available, but this browser does not provide the built-in BarcodeDetector API. Try an updated Chrome/Edge browser; if still unsupported, we need to add a barcode library.',true);return}
+ try{
+  const supported=await window.BarcodeDetector.getSupportedFormats().catch(()=>[]);
+  const wanted=['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','codabar','qr_code'];
+  const formats=wanted.filter(f=>supported.includes(f));
+  detector=new BarcodeDetector(formats.length?{formats}:undefined);
+  cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+  $('scannerVideo').srcObject=cameraStream;await $('scannerVideo').play();
+  $('scannerBox').classList.remove('hidden');$('startScan').disabled=true;$('stopScan').disabled=false;scanning=true;
+  setScanStatus('Camera on. Point the barcode inside the green frame.');scanLoop();
+ }catch(err){stopCamera();setScanStatus('Could not start camera: '+(err.message||err.name)+'. Allow camera permission and try again.',true)}
+}
+async function scanLoop(){
+ if(!scanning)return;
+ try{
+  const video=$('scannerVideo');
+  if(video.readyState>=2){const codes=await detector.detect(video);if(codes.length){const code=codes[0].rawValue,now=Date.now();if(code&&(code!==lastCode||now-lastCodeAt>1800)){lastCode=code;lastCodeAt=now;addScannedBarcode(code);setScanStatus('Scanned barcode: '+code);}}}
+ }catch(e){}
+ if(scanning)requestAnimationFrame(scanLoop);
+}
+function stopCamera(){scanning=false;if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null}$('scannerVideo').srcObject=null;$('scannerBox').classList.add('hidden');$('startScan').disabled=false;$('stopScan').disabled=true}
+$('startScan').onclick=startCamera;$('stopScan').onclick=()=>{stopCamera();setScanStatus('Camera stopped.')};
+window.addEventListener('pagehide',()=>{stopCamera();stopProductCamera();});
+renderCart();renderProducts();renderSales();
+</script>
+
+<script>
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch((err) => {
+      console.warn("Offline support could not be enabled:", err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>
